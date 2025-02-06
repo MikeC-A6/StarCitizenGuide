@@ -3,7 +3,7 @@ import logging
 from flask import Flask, render_template, jsonify, request
 from ship_data import ShipDataManager
 from scraper import WebScraper
-import google.generativeai as genai
+from gemini_client import query_ship_data
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -11,11 +11,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key_123")
-
-# Initialize Google Gemini API
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "your-api-key")
-genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel('gemini-2.0-flash-001')
 
 # Initialize managers
 ship_manager = ShipDataManager()
@@ -43,39 +38,22 @@ def query_ship():
 
         # Get base ship data
         ship_data = ship_manager.find_relevant_ships(query)
-        
-        # First, try to generate a response with just the structured data
-        initial_context = {
-            "query": query,
-            "ship_data": ship_data
-        }
 
-        initial_response = model.generate_content(
-            f"""Based on this ship data: {initial_context}
-            Can you provide a complete answer to: {query}
-            If you cannot provide a complete answer, respond with 'NEED_MORE_DATA'.
-            Otherwise, provide your response."""
-        )
+        # Generate response using Gemini
+        context = f"""Query about Star Citizen ships: {query}
+                     Available ship data: {ship_data}"""
 
-        # If the model indicates it needs more data
-        if "NEED_MORE_DATA" in initial_response.text:
-            # Check which specific data we need
-            if ship_manager.needs_additional_data(query, ship_data):
-                urls = ship_manager.get_relevant_urls(ship_data)
-                additional_data = web_scraper.scrape_multiple_urls(urls)
-                initial_context["additional_data"] = additional_data
+        response_text = query_ship_data(context)
 
-                # Generate final response with additional data
-                final_response = model.generate_content(
-                    f"""Based on this combined data: {initial_context}
-                    Please provide a detailed response to: {query}
-                    Format the response in a clear, structured way."""
-                )
-                response_text = final_response.text
-            else:
-                response_text = "I apologize, but I don't have enough information to provide a complete answer to your query."
-        else:
-            response_text = initial_response.text
+        # If we need additional data
+        if "insufficient information" in response_text.lower():
+            urls = ship_manager.get_relevant_urls(ship_data)
+            additional_data = web_scraper.scrape_multiple_urls(urls)
+
+            # Generate new response with additional data
+            enhanced_context = f"""{context}
+                                 Additional ship information: {additional_data}"""
+            response_text = query_ship_data(enhanced_context)
 
         return jsonify({
             "success": True,
