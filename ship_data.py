@@ -52,29 +52,51 @@ class ShipDataManager:
         return False
 
     def needs_additional_data(self, query: str, ship_data: Dict[str, Any]) -> bool:
-        """Determine if web scraping is needed for complete answer"""
-        # Check if we have enough information in structured data
-        required_fields = ['Manufacturer', 'Role', 'Cargo capacity', 'SCM speed', 'Quantum speed']
+        """Determine if web scraping is needed based on query context"""
+        query = query.lower()
         
+        # Define field mappings for common query topics
+        field_mappings = {
+            'cargo': ['Cargo capacity'],
+            'speed': ['SCM speed', 'Quantum speed'],
+            'fuel': ['Hydrogen fuel capacity', 'Quantum fuel capacity'],
+            'price': ['Pledge price', 'In-game price'],
+            'crew': ['Crew'],
+            'role': ['Role'],
+            'manufacturer': ['Manufacturer']
+        }
+        
+        # Determine which fields are relevant to the query
+        required_fields = []
+        for keyword, fields in field_mappings.items():
+            if keyword in query:
+                required_fields.extend(fields)
+                
+        # If no specific fields are identified, use a minimal set
+        if not required_fields:
+            required_fields = ['Manufacturer', 'Role']
+            
+        # Only check relevant fields for the ships
         for ship_info in ship_data.values():
             printouts = ship_info.get('printouts', {})
-            if not all(field in printouts and printouts[field] for field in required_fields):
+            # Only check fields that are relevant to the query
+            missing_relevant_data = any(
+                field in required_fields and 
+                (field not in printouts or not printouts[field])
+                for field in required_fields
+            )
+            if missing_relevant_data:
                 return True
                 
         return False
 
     def get_relevant_urls(self, ship_data: Dict[str, Any]) -> List[str]:
-        """Extract relevant URLs for web scraping"""
+        """Extract only the most relevant URLs for web scraping"""
         urls = []
         for ship_info in ship_data.values():
-            # Get ship details page URL
+            # Only get the main ship details URL, skip pledge store URL
             if ship_info.get('fullurl'):
                 urls.append(ship_info['fullurl'])
-            
-            # Get pledge store URL if available
-            pledge_url = ship_info.get('printouts', {}).get('Pledge store URL', [])
-            if pledge_url:
-                urls.append(pledge_url[0])
                 
         return list(set(urls))  # Remove duplicates
 

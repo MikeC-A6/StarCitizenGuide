@@ -44,28 +44,42 @@ def query_ship():
         # Get base ship data
         ship_data = ship_manager.find_relevant_ships(query)
         
-        # Prepare context for Gemini
-        context = {
+        # First, try to generate a response with just the structured data
+        initial_context = {
             "query": query,
             "ship_data": ship_data
         }
 
-        # Check if we need additional data
-        if ship_manager.needs_additional_data(query, ship_data):
-            urls = ship_manager.get_relevant_urls(ship_data)
-            additional_data = web_scraper.scrape_multiple_urls(urls)
-            context["additional_data"] = additional_data
-
-        # Generate response using Gemini
-        response = model.generate_content(
-            f"""Based on this ship data: {context}
-            Please provide a detailed response to: {query}
-            Format the response in a clear, structured way."""
+        initial_response = model.generate_content(
+            f"""Based on this ship data: {initial_context}
+            Can you provide a complete answer to: {query}
+            If you cannot provide a complete answer, respond with 'NEED_MORE_DATA'.
+            Otherwise, provide your response."""
         )
+
+        # If the model indicates it needs more data
+        if "NEED_MORE_DATA" in initial_response.text:
+            # Check which specific data we need
+            if ship_manager.needs_additional_data(query, ship_data):
+                urls = ship_manager.get_relevant_urls(ship_data)
+                additional_data = web_scraper.scrape_multiple_urls(urls)
+                initial_context["additional_data"] = additional_data
+
+                # Generate final response with additional data
+                final_response = model.generate_content(
+                    f"""Based on this combined data: {initial_context}
+                    Please provide a detailed response to: {query}
+                    Format the response in a clear, structured way."""
+                )
+                response_text = final_response.text
+            else:
+                response_text = "I apologize, but I don't have enough information to provide a complete answer to your query."
+        else:
+            response_text = initial_response.text
 
         return jsonify({
             "success": True,
-            "response": response.text,
+            "response": response_text,
             "sources": ship_manager.get_data_sources(ship_data)
         })
 
