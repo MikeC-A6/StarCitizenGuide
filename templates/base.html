@@ -179,6 +179,7 @@
         
         .markdown-content {
             font-family: 'Inter', sans-serif;
+            color: var(--text-color);
         }
         
         .markdown-content h2 {
@@ -198,6 +199,29 @@
             color: var(--accent-color);
             font-style: normal;
             opacity: 0.9;
+        }
+
+        .markdown-content p {
+            color: var(--text-color);
+            opacity: 0.9;
+        }
+
+        .text-muted {
+            color: rgba(230, 230, 230, 0.7) !important;
+        }
+
+        /* Override Bootstrap text colors */
+        .text-secondary {
+            color: rgba(230, 230, 230, 0.7) !important;
+        }
+
+        .form-label {
+            color: var(--primary-color);
+            opacity: 0.9;
+        }
+
+        .form-control::placeholder {
+            color: rgba(230, 230, 230, 0.5);
         }
     </style>
 </head>
