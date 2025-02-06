@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from flask import Flask, render_template, jsonify, request
 from ship_data import ShipDataManager
 from scraper import WebScraper
@@ -210,33 +211,66 @@ def query_ship():
                     "error": f"Could not find data for {ship_name}"
                 }), 404
 
+            # Get the ship's URL and scrape additional data
+            ship_url = ship_manager.get_specific_ship_url(ship_name)
+            scraped_data = {}
+            if ship_url:
+                logger.info(f"Scraping data for ship URL: {ship_url}")
+                scraped_results = web_scraper.scrape_multiple_urls([ship_url])
+                logger.info(f"Scraped results: {json.dumps(scraped_results, indent=2)}")
+                if scraped_results and scraped_results[0].get('content'):
+                    scraped_data = scraped_results[0]['content']
+                    logger.info(f"Extracted content: {json.dumps(scraped_data, indent=2)}")
+
             context = {
                 "query": query,
-                "ship_data": {ship_name: ship_info}  # Only include relevant ship
+                "ship_data": {ship_name: ship_info},  # Base ship data
+                "scraped_data": scraped_data,  # Additional scraped information
+                "ship_url": ship_url
             }
+            
+            logger.info(f"Full context being sent to LLM: {json.dumps(context, indent=2)}")
 
-            response_text = query_ship_data(f"""Based on this Star Citizen ship data: {context}
+            prompt = f"""Based on this Star Citizen ship data: {context}
                 Please provide a detailed answer to: {query}
+                
+                Important notes:
+                1. Use both the base ship data and the scraped web data to provide the most complete answer
+                2. The scraped_data contains several important sections:
+                   - 'description': General ship description
+                   - 'features': Detailed features including weapons information
+                   - 'specifications': Detailed specifications including weapon hardpoints
+                   - 'weapons': Specific weapon information including sizes and configurations
+                3. If information is found in the scraped data but not in the base data, use the scraped data
+                4. For weapon-related queries, check both the 'weapons' section and 'specifications' section
+                5. Provide specific details and numbers when available
+                
+                When discussing weapons:
+                - Include both fixed and gimbaled weapon options
+                - Specify the size and number of hardpoints
+                - Mention default weapon loadout if available
+                - Include weapon mounting locations (e.g., nose, wings)
+                
                 Format your response using proper markdown:
                 - Use ## for section headings (in title case)
                 - Use bullet points for lists
                 - Use **bold** for emphasis on important information and numbers
                 - Use *italics* for supplementary information
-                - Format all measurements consistently (e.g., "**203.5** m/s")
-                - Format all units the same way (m/s, SCU, L) without special styling
+                - Format all measurements consistently (e.g., "**Size 2**" for weapon sizes)
                 - Use proper spacing between sections
-                Format the response in a clear, natural way that is easy to read.
                 
                 Important formatting rules:
                 1. Keep all text in the same color (don't use special formatting for units)
                 2. Use consistent formatting for all measurements
                 3. Don't use any custom HTML or color codes
-                4. Keep all text either in the default color or specifically bold/italic as specified above""")
+                4. Keep all text either in the default color or specifically bold/italic as specified above"""
 
-            # Get only the URL for the specific ship
+            response_text = query_ship_data(prompt)
+
+            # Include the ship's URL in sources
             sources = []
-            if ship_info.get('fullurl'):
-                sources.append(ship_info['fullurl'])
+            if ship_url:
+                sources.append(ship_url)
 
             return jsonify({
                 "success": True,
