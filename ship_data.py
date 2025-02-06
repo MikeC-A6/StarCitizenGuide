@@ -27,11 +27,20 @@ class ShipDataManager:
         relevant_ships = {}
         query_terms = query.lower().split()
         
+        # First try to find exact ship matches
         for ship_name, ship_info in self.ship_data.items():
-            if any(term in ship_name.lower() for term in query_terms):
+            # Check for exact ship name matches first
+            ship_terms = ship_name.lower().split()
+            if all(term in ship_name.lower() for term in query_terms if len(term) > 2):
                 relevant_ships[ship_name] = ship_info
-            elif self._check_ship_attributes(ship_info, query_terms):
-                relevant_ships[ship_name] = ship_info
+                
+        # If no exact matches, try broader matching
+        if not relevant_ships:
+            for ship_name, ship_info in self.ship_data.items():
+                if any(term in ship_name.lower() for term in query_terms if len(term) > 2):
+                    relevant_ships[ship_name] = ship_info
+                elif self._check_ship_attributes(ship_info, query_terms):
+                    relevant_ships[ship_name] = ship_info
                 
         return relevant_ships
 
@@ -101,9 +110,38 @@ class ShipDataManager:
         return list(set(urls))  # Remove duplicates
 
     def get_data_sources(self, ship_data: Dict[str, Any]) -> List[str]:
-        """Get list of data sources used"""
+        """Get list of data sources used - only returns URLs for ships that were found in the query"""
         sources = []
-        for ship_info in ship_data.values():
-            if ship_info.get('fullurl'):
-                sources.append(ship_info['fullurl'])
-        return sources
+        
+        # Get the ship names that were actually found in the query
+        found_ships = list(ship_data.keys())
+        
+        # Only include URLs for ships that were actually found/used
+        for ship_name, ship_info in self.ship_data.items():
+            # Check if this ship was in our query results
+            if ship_name in found_ships:
+                if ship_info.get('fullurl'):
+                    sources.append(ship_info['fullurl'])
+                # Include manufacturer URL only if it's relevant to the query
+                manufacturer = ship_info.get('printouts', {}).get('Manufacturer', [])
+                if manufacturer and manufacturer[0].get('fullurl'):
+                    sources.append(manufacturer[0]['fullurl'])
+                    
+        return list(set(sources))  # Remove any duplicates
+
+    def get_ship_url(self, ship_name: str) -> str:
+        """Get the specific URL for a ship"""
+        ship_info = self.ship_data.get(ship_name, {})
+        return ship_info.get('fullurl', '')
+
+    def get_specific_ship_url(self, query: str) -> str:
+        """Get URL for a specific ship based on query"""
+        # Normalize query
+        query = query.lower()
+        
+        # First try exact match
+        for ship_name, ship_info in self.ship_data.items():
+            if query in ship_name.lower():
+                return ship_info.get('fullurl', '')
+                
+        return ''

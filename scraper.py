@@ -1,7 +1,8 @@
 import logging
-import trafilatura
 from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from bs4 import BeautifulSoup
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -12,12 +13,54 @@ class WebScraper:
     def scrape_url(self, url: str) -> Dict[str, str]:
         """Scrape content from a single URL"""
         try:
-            downloaded = trafilatura.fetch_url(url)
-            if downloaded:
-                content = trafilatura.extract(downloaded)
+            response = requests.get(url)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                content = {}
+                
+                # Find the Quick facts section
+                quick_facts = {}
+                
+                # Look for the Cost section which contains price info
+                cost_info = {}
+                
+                # Find standalone price
+                standalone_row = soup.find('tr', string=lambda text: text and 'Standalone' in text)
+                if standalone_row:
+                    price_cell = standalone_row.find_next('td')
+                    if price_cell:
+                        pledge_price = price_cell.get_text(strip=True)
+                        cost_info['pledge_price'] = pledge_price
+                
+                # Find in-game price
+                ingame_row = soup.find('tr', string=lambda text: text and 'In-game price' in text)
+                if ingame_row:
+                    price_cell = ingame_row.find_next('td')
+                    if price_cell:
+                        ingame_price = price_cell.get_text(strip=True)
+                        cost_info['in_game_price'] = ingame_price
+                
+                # Find purchase locations
+                location_row = soup.find('tr', string=lambda text: text and 'Purchase location' in text)
+                if location_row:
+                    location_cell = location_row.find_next('td')
+                    if location_cell:
+                        locations = location_cell.get_text(strip=True)
+                        cost_info['purchase_locations'] = locations
+                
+                content['cost'] = cost_info
+                
+                # Get the main description
+                main_content = soup.find('div', {'class': 'mw-parser-output'})
+                if main_content:
+                    # Get the first paragraph after the intro
+                    paragraphs = main_content.find_all('p')
+                    if paragraphs:
+                        content['description'] = paragraphs[0].get_text(strip=True)
+                
                 return {
                     "url": url,
-                    "content": content if content else "No content extracted"
+                    "content": content
                 }
             return {"url": url, "content": "Failed to download content"}
         except Exception as e:

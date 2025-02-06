@@ -1,25 +1,48 @@
-document.addEventListener('DOMContentLoaded', function() {
+// Load marked.js for markdown parsing
+const script = document.createElement('script');
+script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+document.head.appendChild(script);
+
+document.addEventListener('DOMContentLoaded', () => {
+    const queryForm = document.getElementById('queryForm');
     const queryInput = document.getElementById('queryInput');
-    const submitButton = document.getElementById('submitQuery');
-    const loadingSpinner = document.getElementById('loadingSpinner');
     const responseArea = document.getElementById('responseArea');
     const responseContent = document.getElementById('responseContent');
-    const errorArea = document.getElementById('errorArea');
-    const errorMessage = document.getElementById('errorMessage');
     const sourcesList = document.getElementById('sourcesList');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorMessage = document.getElementById('errorMessage');
 
-    submitButton.addEventListener('click', async function() {
-        const query = queryInput.value.trim();
+    // Configure marked options for better formatting
+    script.onload = () => {
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            headerIds: false,
+            mangle: false
+        });
+    };
+
+    queryForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
         
+        const query = queryInput.value.trim();
         if (!query) {
             showError('Please enter a query');
             return;
         }
 
-        // Reset UI
-        hideError();
-        showLoading();
+        // Show loading state
+        const submitButton = queryForm.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = `
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            Processing...
+        `;
+
+        // Hide previous response and errors
         responseArea.classList.add('d-none');
+        errorAlert.classList.add('d-none');
 
         try {
             const response = await fetch('/api/query', {
@@ -27,56 +50,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ query: query })
+                body: JSON.stringify({ query })
             });
 
             const data = await response.json();
 
             if (data.success) {
-                // Display response
-                responseContent.textContent = data.response;
+                // Parse markdown and render response
+                responseContent.innerHTML = marked.parse(data.response);
                 
-                // Display sources
-                sourcesList.innerHTML = '';
-                data.sources.forEach(source => {
-                    const li = document.createElement('li');
-                    const a = document.createElement('a');
-                    a.href = source;
-                    a.textContent = source;
-                    a.target = '_blank';
-                    a.classList.add('text-info');
-                    li.appendChild(a);
-                    sourcesList.appendChild(li);
-                });
-                
+                // Update sources list
+                sourcesList.innerHTML = data.sources
+                    .map(source => `
+                        <li class="mb-2">
+                            <a href="${source}" target="_blank" rel="noopener noreferrer">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>
+                                ${source}
+                            </a>
+                        </li>
+                    `)
+                    .join('');
+
                 responseArea.classList.remove('d-none');
+                
+                // Smooth scroll to response
+                responseArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } else {
-                showError(data.error || 'An error occurred');
+                showError(data.error || 'Failed to process query');
             }
         } catch (error) {
-            showError('Failed to communicate with server');
+            showError('An error occurred while processing your request');
             console.error('Error:', error);
         } finally {
-            hideLoading();
+            // Restore button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     });
 
-    function showLoading() {
-        loadingSpinner.classList.remove('d-none');
-        submitButton.disabled = true;
-    }
-
-    function hideLoading() {
-        loadingSpinner.classList.add('d-none');
-        submitButton.disabled = false;
-    }
-
     function showError(message) {
         errorMessage.textContent = message;
-        errorArea.classList.remove('d-none');
-    }
-
-    function hideError() {
-        errorArea.classList.add('d-none');
+        errorAlert.classList.remove('d-none');
+        errorAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 });
