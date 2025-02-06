@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title mb-4">Ship Data Query</h2>
+                
+                <div class="mb-4">
+                    <label for="queryInput" class="form-label">Ask about Star Citizen ships:</label>
+                    <textarea id="queryInput" class="form-control" rows="3" 
+                            placeholder="Example: What are the cargo capabilities of Origin ships?"></textarea>
+                </div>
+                
+                <button id="submitQuery" class="btn btn-primary">Submit Query</button>
+                
+                <div id="loadingSpinner" class="d-none mt-4 text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                
+                <div id="responseArea" class="mt-4 d-none">
+                    <h3>Response:</h3>
+                    <div id="responseContent" class="p-3 bg-dark rounded"></div>
+                    
+                    <div id="sourcesSection" class="mt-3">
+                        <h4>Sources:</h4>
+                        <ul id="sourcesList" class="list-unstyled"></ul>
+                    </div>
+                </div>
+                
+                <div id="errorArea" class="mt-4 d-none">
+                    <div class="alert alert-danger" role="alert">
+                        <span id="errorMessage"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
