@@ -38,60 +38,29 @@ def query_ship():
         if not query:
             return jsonify({"success": False, "error": "No query provided"}), 400
 
-        # Extract ship name from query using common patterns
-        ship_name = None
-        query_lower = query.lower()
+        # Get list of all available ships for context
+        all_ships = ship_manager.get_all_ships()
         
-        # Common patterns for ship name extraction
-        patterns = [
-            "of the", 
-            "about the",
-            "is the",
-            "for the"
-        ]
+        # Use LLM to identify the ship
+        ship_identification_prompt = f"""Given this query about Star Citizen ships: "{query}"
+        And this list of available ships: {all_ships}
         
-        # Try to extract full ship name with manufacturer
-        for pattern in patterns:
-            if pattern in query_lower:
-                ship_parts = query_lower.split(pattern)
-                if len(ship_parts) > 1:
-                    potential_name = ship_parts[1].strip()
-                    # Get all ship names and sort by length (longest first to match most specific)
-                    all_ships = sorted(ship_manager.get_all_ships(), key=len, reverse=True)
-                    # Try to match full manufacturer + ship name
-                    for ship in all_ships:
-                        ship_lower = ship.lower()
-                        # Check if both manufacturer and ship name are in the query
-                        if "drake" in potential_name and "caterpillar" in potential_name and "drake caterpillar" in ship_lower:
-                            ship_name = ship
-                            break
-                        elif ship_lower in potential_name:
-                            ship_name = ship
-                            break
-                    if ship_name:
-                        break
-
-        # If no pattern match, try direct ship name search
-        if not ship_name:
-            all_ships = sorted(ship_manager.get_all_ships(), key=len, reverse=True)
-            for ship in all_ships:
-                ship_lower = ship.lower()
-                # Prioritize exact manufacturer + ship name matches
-                if "drake" in query_lower and "caterpillar" in query_lower and "drake caterpillar" in ship_lower:
-                    ship_name = ship
-                    break
-                elif ship_lower in query_lower:
-                    ship_name = ship
-                    break
-
-        if not ship_name:
+        What specific ship is being asked about? Return ONLY the exact ship name from the list.
+        If multiple ships are mentioned, return the main one being asked about.
+        If no specific ship is mentioned or the ship isn't in the list, return "NONE".
+        
+        Ship name:"""
+        
+        ship_name = query_ship_data(ship_identification_prompt).strip()
+        
+        if ship_name == "NONE" or ship_name not in all_ships:
             return jsonify({
                 "success": False,
-                "error": "Could not identify which ship you're asking about"
+                "error": "Could not identify which ship you're asking about. Please include the full ship name in your query."
             }), 400
 
         # For price/location queries
-        if "cost" in query_lower or "price" in query_lower or "buy" in query_lower:
+        if "cost" in query.lower() or "price" in query.lower() or "buy" in query.lower():
             ship_url = ship_manager.get_specific_ship_url(ship_name)
             
             if ship_url:
@@ -161,14 +130,10 @@ def query_ship():
         # Get the specific ship's info
         ship_info = ship_data.get(ship_name)
         if not ship_info:
-            # Try to find the most specific match
-            for name, info in ship_data.items():
-                if "drake caterpillar" in name.lower():
-                    ship_info = info
-                    ship_name = name
-                    break
-            if not ship_info:
-                ship_info = next(iter(ship_data.values()))
+            return jsonify({
+                "success": False,
+                "error": f"Could not find data for {ship_name}"
+            }), 404
 
         context = {
             "query": query,
