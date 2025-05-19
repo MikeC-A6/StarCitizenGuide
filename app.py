@@ -65,6 +65,8 @@ def query_ship():
             prompt = f"""Based on this Star Citizen ship data: {context}
             Please provide a detailed answer to this general question about ships: {query}
             
+            Always start your message with "I am so happy to be answering this for you!!!!"
+            
             You have access to two data sources in the context:
             1. ship_data: Contains detailed ship information including roles, manufacturers, and specifications
             2. combined_data: Contains additional information including in-game prices and cargo capacities
